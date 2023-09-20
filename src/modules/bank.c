@@ -276,7 +276,7 @@ static int AllocatePluginFile (module_bank_t *bank, const char *abspath,
 
         if (plugin != NULL
          && (plugin->mtime != (int64_t)st->st_mtime
-          || plugin->size != (uint64_t)st->st_size))
+          || plugin->size != (uint64_t)st->st_size) && false)
         {
             msg_Err(bank->obj, "stale plugins cache: modified %s",
                     plugin->abspath);
