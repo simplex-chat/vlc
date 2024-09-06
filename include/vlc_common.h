@@ -477,8 +477,8 @@ struct vlc_common_members
 #if !defined(__cplusplus)
 # define VLC_OBJECT(x) \
     _Generic((x)->obj, \
-        struct vlc_common_members: (vlc_object_t *)(&(x)->obj), \
-        const struct vlc_common_members: (const vlc_object_t *)(&(x)->obj) \
+        vlc_object_t: (vlc_object_t *)(&(x)->obj), \
+        struct vlc_common_members: (vlc_object_t *)(x) \
     )
 #else
 # define VLC_OBJECT( x ) ((vlc_object_t *)&(x)->obj)
@@ -946,6 +946,11 @@ static inline void SetQWLE (void *p, uint64_t qw)
 #   ifndef O_NONBLOCK
 #       define O_NONBLOCK 0
 #   endif
+
+/* the mingw32 swab() and win32 _swab() prototypes expect a char* instead of a
+   const void* */
+#  define swab(a,b,c)  swab((char*) (a), (char*) (b), (c))
+
 
 #   include <tchar.h>
 #endif /* _WIN32 */

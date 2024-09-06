@@ -408,6 +408,7 @@ static void Close(vlc_object_t *p_this)
     vout_display_sys_t *sys = vd->sys;
 
     atomic_store(&sys->is_ready, false);
+    [sys->videoLayer vlcClose];
     [sys->videoView vlcClose];
 
     if (sys->vgl && !vlc_gl_MakeCurrent(sys->gl)) {
@@ -581,7 +582,6 @@ static int Control(vout_display_t *vd, int query, va_list ap)
 - (void)vlcClose
 {
     @synchronized (self) {
-        [(VLCCAOpenGLLayer *)self.layer vlcClose];
         _vlc_vd = NULL;
     }
 }
@@ -841,6 +841,10 @@ shouldInheritContentsScale:(CGFloat)newScale
             sys->cfg.display.width = newSize.width;
             sys->cfg.display.height = newSize.height;
         }
+
+        /* Workaround: there's no window module, so signal the correct size to the core. */
+        vout_display_SendEventDisplaySize (_voutDisplay,
+            newSize.width, newSize.height);
     }
 }
 

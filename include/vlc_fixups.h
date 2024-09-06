@@ -501,8 +501,11 @@ void *tsearch( const void *key, void **rootp, int(*cmp)(const void *, const void
 void *tfind( const void *key, const void **rootp, int(*cmp)(const void *, const void *) );
 void *tdelete( const void *key, void **rootp, int(*cmp)(const void *, const void *) );
 void twalk( const void *root, void(*action)(const void *nodep, VISIT which, int depth) );
+#ifndef _WIN32
+/* the Win32 prototype of lfind() expects an unsigned* for 'nmemb' */
 void *lfind( const void *key, const void *base, size_t *nmemb,
              size_t size, int(*cmp)(const void *, const void *) );
+#endif
 #endif /* HAVE_SEARCH_H */
 #ifndef HAVE_TDESTROY
 void tdestroy( void *root, void (*free_node)(void *nodep) );
@@ -588,6 +591,12 @@ struct addrinfo
     char *ai_canonname;
     struct addrinfo *ai_next;
 };
+
+# ifdef __LIBCN__
+/* OS/2 LIBCn has inet_pton(). Because of this, socklen_t is not defined above.
+ * And OS/2 LIBCn has socklen_t. So include sys/socket.h here for socklen_t. */
+#  include <sys/socket.h>
+# endif
 
 const char *gai_strerror (int);
 

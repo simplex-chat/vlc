@@ -1,11 +1,18 @@
-diff --git a/build/make/configure.sh b/build/make/configure.sh
-index 581042e38..5b282d666 100644
---- a/build/make/configure.sh
-+++ b/build/make/configure.sh
-@@ -861,100 +861,6 @@ process_common_toolchain() {
-   # PIC is probably what we want when building shared libs
-   enabled shared && soft_enable pic
+--- libvpx-1.14.0/build/make/configure.sh	2024-01-09 16:12:22.000000000 -0500
++++ libvpx-1.14.0-new/build/make/configure.sh	2024-01-24 16:12:30.986695507 -0500
+@@ -863,109 +863,6 @@
+       ;;
+   esac
  
+-  # Position independent code (PIC) is probably what we want when building
+-  # shared libs or position independent executable (PIE) targets.
+-  enabled shared && soft_enable pic
+-  check_cpp << EOF || soft_enable pic
+-#if !(__pie__ || __PIE__)
+-#error Neither __pie__ or __PIE__ are set
+-#endif
+-EOF
+-
 -  # Minimum iOS version for all target platforms (darwin and iphonesimulator).
 -  # Shared library framework builds are only possible on iOS 8 and later.
 -  if enabled shared; then
@@ -85,7 +92,7 @@ index 581042e38..5b282d666 100644
 -      add_cflags  "-mmacosx-version-min=10.15"
 -      add_ldflags "-mmacosx-version-min=10.15"
 -      ;;
--    *-darwin2[0-1]-*)
+-    *-darwin2[0-3]-*)
 -      add_cflags  "-arch ${toolchain%%-*}"
 -      add_ldflags "-arch ${toolchain%%-*}"
 -      ;;
@@ -103,7 +110,7 @@ index 581042e38..5b282d666 100644
    # Handle Solaris variants. Solaris 10 needs -lposix4
    case ${toolchain} in
      sparc-solaris-*)
-@@ -1143,12 +1049,6 @@ EOF
+@@ -1170,12 +1067,6 @@
                add_cflags -isysroot ${alt_libc}
              fi
  
@@ -116,16 +123,3 @@ index 581042e38..5b282d666 100644
              for d in lib usr/lib usr/lib/system; do
                try_dir="${alt_libc}/${d}"
                [ -d "${try_dir}" ] && add_ldflags -L"${try_dir}"
-@@ -1133,12 +1037,6 @@
-                 fi
-                 ;;
-             esac
--
--            if [ "$(show_darwin_sdk_major_version iphoneos)" -gt 8 ]; then
--              check_add_cflags -fembed-bitcode
--              check_add_asflags -fembed-bitcode
--              check_add_ldflags -fembed-bitcode
--            fi
-           fi
- 
-           asm_conversion_cmd="${source_path}/build/make/ads2gas_apple.pl"

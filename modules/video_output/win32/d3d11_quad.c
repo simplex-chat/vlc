@@ -71,6 +71,11 @@ void D3D11_RenderQuad(d3d11_device_t *d3d_dev, d3d_quad_t *quad,
     ID3D11DeviceContext_RSSetViewports(d3d_dev->d3dcontext, 1, &quad->cropViewport);
 
     ID3D11DeviceContext_DrawIndexed(d3d_dev->d3dcontext, quad->indexCount, 0, 0);
+
+    /* force unbinding the input texture, otherwise we get:
+     * OMSetRenderTargets: Resource being set to OM RenderTarget slot 0 is still bound on input! */
+    ID3D11ShaderResourceView *reset[D3D11_MAX_SHADER_VIEW] = { 0 };
+    ID3D11DeviceContext_PSSetShaderResources(d3d_dev->d3dcontext, 0, quad->resourceCount, reset);
 }
 
 static bool AllocQuadVertices(vlc_object_t *o, d3d11_device_t *d3d_dev, d3d_quad_t *quad)
@@ -269,7 +274,7 @@ static void SetupQuadFlat(d3d_vertex_t *dst_data, const RECT *output,
         top    =  (src_width  - MidX) / (output->right - MidX);
         bottom = -MidY / (MidY - output->top);
         left   = -MidX / (MidX - output->left);
-        right  =  (src_height - MidY) / (output->bottom - MidY);
+        right  =  (src_height - MidX) / (output->bottom - MidX);
         break;
     case ORIENT_ANTI_TRANSPOSED:
         MidY = (output->left + output->right) / 2.f;

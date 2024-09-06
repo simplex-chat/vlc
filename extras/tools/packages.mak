@@ -12,16 +12,16 @@ NASM_URL=http://www.nasm.us/pub/nasm/releasebuilds/$(NASM_VERSION)/nasm-$(NASM_V
 CMAKE_VERSION=3.17.0
 CMAKE_URL=http://www.cmake.org/files/v3.17/cmake-$(CMAKE_VERSION).tar.gz
 
-LIBTOOL_VERSION=2.4.6
+LIBTOOL_VERSION=2.4.7
 LIBTOOL_URL=$(GNU)/libtool/libtool-$(LIBTOOL_VERSION).tar.gz
 
-AUTOCONF_VERSION=2.69
+AUTOCONF_VERSION=2.71
 AUTOCONF_URL=$(GNU)/autoconf/autoconf-$(AUTOCONF_VERSION).tar.gz
 
-AUTOMAKE_VERSION=1.16.1
+AUTOMAKE_VERSION=1.16.5
 AUTOMAKE_URL=$(GNU)/automake/automake-$(AUTOMAKE_VERSION).tar.gz
 
-M4_VERSION=1.4.18
+M4_VERSION=1.4.19
 M4_URL=$(GNU)/m4/m4-$(M4_VERSION).tar.gz
 
 PKGCFG_VERSION=0.28-1
@@ -57,7 +57,7 @@ FLEX_URL=https://github.com/westes/flex/releases/download/v$(FLEX_VERSION)/flex-
 HELP2MAN_VERSION=1.47.6
 HELP2MAN_URL=$(GNU)/help2man/help2man-$(HELP2MAN_VERSION).tar.xz
 
-MESON_VERSION=0.55.1
+MESON_VERSION=0.56.2
 MESON_URL=https://github.com/mesonbuild/meson/releases/download/$(MESON_VERSION)/meson-$(MESON_VERSION).tar.gz
 
 NINJA_VERSION=1.8.2

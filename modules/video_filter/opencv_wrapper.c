@@ -268,6 +268,8 @@ static void Destroy( vlc_object_t *p_this )
     filter_t* p_filter = (filter_t*)p_this;
     ReleaseImages( p_filter );
 
+    free( p_filter->p_sys->psz_inner_name );
+
     // Release the internal OpenCV filter.
     module_unneed( p_filter->p_sys->p_opencv, p_filter->p_sys->p_opencv->p_module );
     vlc_object_release( p_filter->p_sys->p_opencv );
@@ -442,9 +444,16 @@ static picture_t* Filter( filter_t* p_filter, picture_t* p_pic )
                         p_filter->p_sys->p_proc_image,
                         &(p_filter->p_sys->p_proc_image->format),
                         &fmt_out );
-
-            picture_CopyPixels( p_outpic, p_outpic_tmp );
-            CopyInfoAndRelease( p_outpic, p_outpic_tmp );
+            if (unlikely(!p_outpic_tmp))
+            {
+                picture_Release(p_outpic);
+                p_outpic = NULL;
+            }
+            else
+            {
+                picture_CopyPixels( p_outpic, p_outpic_tmp );
+                CopyInfoAndRelease( p_outpic, p_outpic_tmp );
+            }
         } else if( p_filter->p_sys->i_internal_chroma == CINPUT ) {
             picture_CopyPixels( p_outpic, p_filter->p_sys->p_proc_image );
             picture_CopyProperties( p_outpic, p_filter->p_sys->p_proc_image );

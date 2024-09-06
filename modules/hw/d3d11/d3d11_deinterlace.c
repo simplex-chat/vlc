@@ -39,7 +39,7 @@
 #include "../../video_chroma/d3d11_fmt.h"
 #include "../../video_filter/deinterlace/common.h"
 
-#ifdef __MINGW32__
+#ifndef HAVE_D3D11_VIDEO_PROCESSOR_PROCESSOR_CAPS
 typedef UINT D3D11_VIDEO_PROCESSOR_PROCESSOR_CAPS;
 #define D3D11_VIDEO_PROCESSOR_PROCESSOR_CAPS_DEINTERLACE_BLEND               0x1
 #define D3D11_VIDEO_PROCESSOR_PROCESSOR_CAPS_DEINTERLACE_BOB                 0x2
@@ -307,7 +307,7 @@ static picture_t *NewOutputPicture( filter_t *p_filter )
             fmt.i_width  = dstDesc.Width;
             fmt.i_height = dstDesc.Height;
             if (AllocateTextures(p_filter, &p_filter->p_sys->d3d_dev, cfg,
-                                 &fmt, 1, pic->p_sys->texture) != VLC_SUCCESS)
+                                 &fmt, false, 1, pic->p_sys->texture) != VLC_SUCCESS)
             {
                 free(pic->p_sys);
                 return NULL;
@@ -449,6 +449,7 @@ int D3D11OpenDeinterlace(vlc_object_t *obj)
     }
     if (strcmp(p_mode->psz_mode, psz_mode))
         msg_Dbg(filter, "using %s deinterlacing mode", p_mode->psz_mode);
+    free(psz_mode);
 
     D3D11_VIDEO_PROCESSOR_RATE_CONVERSION_CAPS rateCaps;
     for (UINT type = 0; type < processorCaps.RateConversionCapsCount; ++type)
@@ -466,7 +467,7 @@ int D3D11OpenDeinterlace(vlc_object_t *obj)
     if ( sys->videoProcessor==NULL &&
          p_mode->i_mode != D3D11_VIDEO_PROCESSOR_PROCESSOR_CAPS_DEINTERLACE_BOB )
     {
-        msg_Dbg(filter, "mode %s not available, trying bob", psz_mode);
+        msg_Dbg(filter, "mode %s not available, trying bob", p_mode->psz_mode);
         p_mode = GetFilterMode("bob");
         for (UINT type = 0; type < processorCaps.RateConversionCapsCount; ++type)
         {

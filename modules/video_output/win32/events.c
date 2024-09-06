@@ -40,6 +40,7 @@
 #include <windows.h>
 #include <windowsx.h>                                        /* GET_X_LPARAM */
 #include <shellapi.h>                                         /* ExtractIcon */
+#include <assert.h>
 
 #define vout_display_sys_win32_t vout_display_sys_t
 
@@ -277,12 +278,18 @@ static void *EventThread( void *p_this )
         case WM_MBUTTONUP:
             MouseReleased( p_event, MOUSE_BUTTON_CENTER );
             break;
+        case WM_MBUTTONDBLCLK:
+            MousePressed( p_event, msg.hwnd, MOUSE_BUTTON_CENTER );
+            break;
 
         case WM_RBUTTONDOWN:
             MousePressed( p_event, msg.hwnd, MOUSE_BUTTON_RIGHT );
             break;
         case WM_RBUTTONUP:
             MouseReleased( p_event, MOUSE_BUTTON_RIGHT );
+            break;
+        case WM_RBUTTONDBLCLK:
+            MousePressed( p_event, msg.hwnd, MOUSE_BUTTON_RIGHT );
             break;
 
         case WM_KEYDOWN:
@@ -813,15 +820,8 @@ static int Win32VoutCreateWindow( event_thread_t *p_event )
 
     if( p_event->hparent )
     {
-        LONG i_style;
-
         /* We don't want the window owner to overwrite our client area */
-        i_style = GetWindowLong( p_event->hparent, GWL_STYLE );
-
-        if( !(i_style & WS_CLIPCHILDREN) )
-            /* Hmmm, apparently this is a blocking call... */
-            SetWindowLong( p_event->hparent, GWL_STYLE,
-                           i_style | WS_CLIPCHILDREN );
+        assert( (GetWindowLong( p_event->hparent, GWL_STYLE ) & WS_CLIPCHILDREN) );
 
         /* Create our fullscreen window */
         p_event->hfswnd =

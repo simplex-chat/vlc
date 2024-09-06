@@ -114,7 +114,7 @@ void matroska_segment_c::ParseSeekHead( KaxSeekHead *seekhead )
                 {
                     if( unlikely( !l->ValidateSize() ) )
                     {
-                        msg_Err( &sys.demuxer,"%s too big... skipping it",  typeid(*l).name() );
+                        msg_Err( &sys.demuxer,"%s too big... skipping it",  EBML_NAME(l) );
                         continue;
                     }
                     if( MKV_IS_ID( l, KaxSeekID ) )
@@ -132,13 +132,13 @@ void matroska_segment_c::ParseSeekHead( KaxSeekHead *seekhead )
                     else if ( !MKV_IS_ID( l, EbmlVoid ) && !MKV_IS_ID( l, EbmlCrc32 ))
                     {
                         /* Many mkvmerge files hit this case. It seems to be a broken SeekHead */
-                        msg_Dbg( &sys.demuxer, "|   |   + Unknown (%s)", typeid(*l).name() );
+                        msg_Dbg( &sys.demuxer, "|   |   + Unknown (%s)", EBML_NAME(l) );
                     }
                 }
             }
             catch(...)
             {
-                msg_Err( &sys.demuxer,"Error while reading %s",  typeid(*l).name() );
+                msg_Err( &sys.demuxer,"Error while reading %s",  EBML_NAME(l) );
             }
             eparser.Up();
 
@@ -191,7 +191,7 @@ void matroska_segment_c::ParseSeekHead( KaxSeekHead *seekhead )
             }
         }
         else if ( !MKV_IS_ID( l, EbmlVoid ) && !MKV_IS_ID( l, EbmlCrc32 ))
-            msg_Dbg( &sys.demuxer, "|   |   + ParseSeekHead Unknown (%s)", typeid(*l).name() );
+            msg_Dbg( &sys.demuxer, "|   |   + ParseSeekHead Unknown (%s)", EBML_NAME(l) );
     }
 }
 
@@ -271,7 +271,7 @@ void matroska_segment_c::ParseTrackEntry( const KaxTrackEntry *m )
         }
         E_CASE( KaxTrackUID, tuid )
         {
-            debug( vars, "Track UID=%u", static_cast<uint32>( tuid ) );
+            debug( vars, "Track UID=%x", static_cast<uint32>( tuid ) );
         }
         E_CASE( KaxTrackType, ttype )
         {
@@ -873,7 +873,7 @@ void matroska_segment_c::ParseTrackEntry( const KaxTrackEntry *m )
           VLC_UNUSED( vars );
         }
         E_CASE_DEFAULT(element) {
-            debug( vars, "Unknown (%s)", typeid(element).name() );
+            debug( vars, "Unknown (%s)", EBML_NAME(&element) );
         }
     };
 
@@ -960,7 +960,7 @@ void matroska_segment_c::ParseTracks( KaxTracks *tracks )
             VLC_UNUSED( vars );
         }
         E_CASE_DEFAULT(element) {
-            MkvTree( *vars.p_demuxer, 2, "Unknown (%s)", typeid(element).name() );
+            MkvTree( *vars.p_demuxer, 2, "Unknown (%s)", EBML_NAME(&element) );
         }
     };
 
@@ -1024,7 +1024,7 @@ void matroska_segment_c::ParseInfo( KaxInfo *info )
             {
                 vars.obj->p_segment_uid = new KaxSegmentUID( uid );
             }
-            debug( vars, "UID=%d", *reinterpret_cast<uint32*>( vars.obj->p_segment_uid->GetBuffer() ) );
+            debug( vars, "UID=%" PRIx64, *reinterpret_cast<uint64*>( vars.obj->p_segment_uid->GetBuffer() ) );
         }
         E_CASE( KaxPrevUID, uid )
         {
@@ -1033,7 +1033,7 @@ void matroska_segment_c::ParseInfo( KaxInfo *info )
                 vars.obj->p_prev_segment_uid = new KaxPrevUID( uid );
                 vars.obj->b_ref_external_segments = true;
             }
-            debug( vars, "PrevUID=%d", *reinterpret_cast<uint32*>( vars.obj->p_prev_segment_uid->GetBuffer() ) );
+            debug( vars, "PrevUID=%" PRIx64, *reinterpret_cast<uint64*>( vars.obj->p_prev_segment_uid->GetBuffer() ) );
         }
         E_CASE( KaxNextUID, uid )
         {
@@ -1042,7 +1042,7 @@ void matroska_segment_c::ParseInfo( KaxInfo *info )
                 vars.obj->p_next_segment_uid = new KaxNextUID( uid );
                 vars.obj->b_ref_external_segments = true;
             }
-            debug( vars, "NextUID=%d", *reinterpret_cast<uint32*>( vars.obj->p_next_segment_uid->GetBuffer() ) );
+            debug( vars, "NextUID=%" PRIx64, *reinterpret_cast<uint64*>( vars.obj->p_next_segment_uid->GetBuffer() ) );
         }
         E_CASE( KaxTimecodeScale, tcs )
         {
@@ -1077,7 +1077,7 @@ void matroska_segment_c::ParseInfo( KaxInfo *info )
         E_CASE( KaxSegmentFamily, uid )
         {
             vars.obj->families.push_back( new KaxSegmentFamily(uid) );
-            debug( vars, "Family=%d", *reinterpret_cast<uint32*>( uid.GetBuffer() ) );
+            debug( vars, "Family=%" PRIx64, *reinterpret_cast<uint64*>( uid.GetBuffer() ) );
         }
         E_CASE( KaxDateUTC, date )
         {
@@ -1141,7 +1141,7 @@ void matroska_segment_c::ParseInfo( KaxInfo *info )
         }
         E_CASE_DEFAULT(element)
         {
-            debug( vars, "Unknown (%s)", typeid(element).name() );
+            debug( vars, "Unknown (%s)", EBML_NAME(&element) );
         }
     };
 
@@ -1185,7 +1185,7 @@ void matroska_segment_c::ParseChapterAtom( int i_level, KaxChapterAtom *ca, chap
         E_CASE( KaxChapterUID, uid )
         {
             vars.chapters.i_uid = static_cast<uint64_t>( uid );
-            debug( vars, "ChapterUID=%" PRIu64, vars.chapters.i_uid );
+            debug( vars, "ChapterUID=%" PRIx64, vars.chapters.i_uid );
         }
         E_CASE( KaxChapterFlagHidden, flag )
         {
@@ -1197,13 +1197,13 @@ void matroska_segment_c::ParseChapterAtom( int i_level, KaxChapterAtom *ca, chap
             vars.chapters.p_segment_uid = new KaxChapterSegmentUID( uid );
             vars.obj->b_ref_external_segments = true;
 
-            debug( vars, "ChapterSegmentUID=%u", *reinterpret_cast<uint32*>( vars.chapters.p_segment_uid->GetBuffer() ) );
+            debug( vars, "ChapterSegmentUID=%" PRIx64, *reinterpret_cast<uint64*>( vars.chapters.p_segment_uid->GetBuffer() ) );
         }
         E_CASE( KaxChapterSegmentEditionUID, euid )
         {
             vars.chapters.p_segment_edition_uid = new KaxChapterSegmentEditionUID( euid );
 
-            debug( vars, "ChapterSegmentEditionUID=%u",
+            debug( vars, "ChapterSegmentEditionUID=%x",
 #if LIBMATROSKA_VERSION < 0x010300
               *reinterpret_cast<uint32*>( vars.chapters.p_segment_edition_uid->GetBuffer() )
 #else
@@ -1430,7 +1430,7 @@ void matroska_segment_c::ParseChapters( KaxChapters *chapters )
                 }
                 E_CASE_DEFAULT( el )
                 {
-                    msg_Dbg( vars.p_demuxer, "|   |   |   + Unknown (%s)", typeid(el).name() );
+                    msg_Dbg( vars.p_demuxer, "|   |   |   + Unknown (%s)", EBML_NAME(&el) );
                 }
             };
             KaxEditionHandler::Dispatcher().iterate( entry.begin(), entry.end(), &data );
@@ -1443,7 +1443,7 @@ void matroska_segment_c::ParseChapters( KaxChapters *chapters )
         }
         E_CASE_DEFAULT( el )
         {
-            msg_Dbg( &vars.sys.demuxer, "|   |   + Unknown (%s)", typeid(el).name() );
+            msg_Dbg( &vars.sys.demuxer, "|   |   + Unknown (%s)", EBML_NAME(&el) );
         }
     };
 
