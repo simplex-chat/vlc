@@ -250,7 +250,7 @@ export XCODE_FLAGS="MACOSX_DEPLOYMENT_TARGET=$MINIMAL_OSX_VERSION -sdk macosx WA
 info "Building contribs"
 spushd "${vlcroot}/contrib"
 mkdir -p contrib-$HOST_TRIPLET && cd contrib-$HOST_TRIPLET
-../bootstrap --build=$BUILD_TRIPLET --host=$HOST_TRIPLET > $out
+../bootstrap --build=$BUILD_TRIPLET --host=$HOST_TRIPLET --disable-breakpad --disable-net --disable-growl --disable-sparkle -- > $out
 if [ "$REBUILD" = "yes" ]; then
     make clean
 fi
@@ -322,6 +322,8 @@ if [ "${vlcroot}/configure" -nt Makefile ]; then
       --host=$HOST_TRIPLET \
       --with-macosx-version-min=$MINIMAL_OSX_VERSION \
       --with-macosx-sdk=$SDKROOT \
+      --disable-gnutls \
+      --disable-sparkle \
       $CONFIGFLAGS \
       $VLC_CONFIGURE_ARGS > $out
 fi
