@@ -9,7 +9,7 @@ info()
 }
 
 ARCH="x86_64"
-MINIMAL_OSX_VERSION="10.7"
+MINIMAL_OSX_VERSION="10.13"
 OSX_KERNELVERSION=`uname -r | cut -d. -f1`
 BUILD_ARCH=`uname -m | cut -d. -f1`
 SDKROOT=$(xcrun --show-sdk-path)
@@ -160,7 +160,7 @@ export RANLIB="`xcrun --find ranlib`"
 export STRINGS="`xcrun --find strings`"
 export STRIP="`xcrun --find strip`"
 export SDKROOT
-export PATH="${vlcroot}/extras/tools/build/bin:${vlcroot}/contrib/${BUILD_TRIPLET}/bin:$python3Path:${VLC_PATH}:/bin:/sbin:/usr/bin:/usr/sbin"
+export PATH="${vlcroot}/extras/tools/build/bin:${vlcroot}/contrib/${BUILD_TRIPLET}/bin:$python3Path:${VLC_PATH}:/usr/local/opt/coreutils/libexec/gnubin:/bin:/sbin:/usr/bin:/usr/sbin"
 
 # Select avcodec flavor to compile contribs with
 export USE_FFMPEG=1
@@ -238,23 +238,17 @@ spopd
 #   enabled. (e.g. ffmpeg)
 # - This will fail the build if a partially available symbol is added later on
 #   in contribs and not mentioned in the list of symbols above.
-export CFLAGS="-Werror=partial-availability"
-export CXXFLAGS="-Werror=partial-availability"
-export OBJCFLAGS="-Werror=partial-availability"
+export CFLAGS="-Werror=partial-availability -Wno-implicit-int"
+export CXXFLAGS="-Werror=partial-availability -Wno-implicit-int"
+export OBJCFLAGS="-Werror=partial-availability -Wno-implicit-int"
 
 export EXTRA_CFLAGS="-isysroot $SDKROOT -mmacosx-version-min=$MINIMAL_OSX_VERSION -DMACOSX_DEPLOYMENT_TARGET=$MINIMAL_OSX_VERSION -arch $ACTUAL_ARCH"
 export EXTRA_LDFLAGS="-Wl,-syslibroot,$SDKROOT -mmacosx-version-min=$MINIMAL_OSX_VERSION -isysroot $SDKROOT -DMACOSX_DEPLOYMENT_TARGET=$MINIMAL_OSX_VERSION -arch $ACTUAL_ARCH"
 # xcodebuild only allows to set a build-in sdk, not a custom one. Therefore use the default included SDK here
 export XCODE_FLAGS="MACOSX_DEPLOYMENT_TARGET=$MINIMAL_OSX_VERSION -sdk macosx WARNING_CFLAGS=-Werror=partial-availability"
 
-CONTRIBFLAGS=
-if [ "$PACKAGETYPE" = "u" ]; then
-    # release package should have sparkle, breakpad, growl
-    CONTRIBFLAGS="$CONTRIBFLAGS --enable-sparkle --enable-breakpad --enable-growl"
-elif [ "$PACKAGETYPE" = "n" ]; then
-    # nightly package should have growl
-    CONTRIBFLAGS="$CONTRIBFLAGS --enable-growl"
-fi
+# sparkle, breakpad and growl are never shipped, whatever the package type
+CONTRIBFLAGS="--disable-sparkle --disable-breakpad --disable-growl"
 
 info "Building contribs"
 spushd "${vlcroot}/contrib"
@@ -323,13 +317,6 @@ CONFIGFLAGS=""
 if [ ! -z "$BREAKPAD" ]; then
      CONFIGFLAGS="$CONFIGFLAGS --with-breakpad=$BREAKPAD"
 fi
-if [ "$PACKAGETYPE" = "u" ]; then
-    # release package should have sparkle, breakpad, growl
-    CONFIGFLAGS="$CONFIGFLAGS --enable-sparkle --enable-breakpad --enable-growl"
-elif [ "$PACKAGETYPE" = "n" ]; then
-    # nightly package should have growl
-    CONFIGFLAGS="$CONFIGFLAGS --enable-growl"
-fi
 
 if [ "${vlcroot}/configure" -nt Makefile ]; then
 
@@ -338,6 +325,7 @@ if [ "${vlcroot}/configure" -nt Makefile ]; then
       --host=$HOST_TRIPLET \
       --with-macosx-version-min=$MINIMAL_OSX_VERSION \
       --with-macosx-sdk=$SDKROOT \
+      --disable-sparkle \
       $CONFIGFLAGS \
       $VLC_CONFIGURE_ARGS > $out
 fi
