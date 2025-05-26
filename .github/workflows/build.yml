@@ -1,0 +1,265 @@
+name: build
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+
+# =============================
+#       Create release
+# =============================
+
+# Create release, but only if it's triggered by tag push.
+# On pull requests/commits push, this job will always complete.
+
+  maybe-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone project
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/checkout@v3
+
+      - name: Build changelog
+        id: build_changelog
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: simplex-chat/release-changelog-builder-action@v5
+        with:
+          configuration: .github/changelog_conf.json
+          failOnError: true
+          ignorePreReleases: true
+          commitMode: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: simplex-chat/action-gh-release@v2
+        with:
+          body: ${{ steps.build_changelog.outputs.changelog }}
+          prerelease: true
+          files: |
+            COPYING
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+# =========================
+#        Linux Build
+# =========================
+
+  build-linux:
+    name: "ubuntu-${{ matrix.os }}"
+    needs: maybe-release
+    runs-on: ubuntu-${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: 22.04
+            arch: x86_64
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: simplex-chat/docker-setup-buildx-action@v3
+
+      # Otherwise we run out of disk space with Docker build
+      - name: Free disk space
+        shell: bash
+        run: ./.github/workflows/linux_util_free_space.sh
+
+      - name: Start container
+        shell: bash
+        run: |
+          docker run -t -d \
+            --device /dev/fuse \
+            --cap-add SYS_ADMIN \
+            --security-opt apparmor:unconfined \
+            --name builder \
+            -v /home/runner/work/_temp:/home/runner/work/_temp \
+            -v ${{ github.workspace }}:/project \
+            debian:stable
+
+      - name: Build CLI
+        shell: docker exec -t builder sh -eu {0}
+        run: |
+          echo "deb-src http://deb.debian.org/debian stable main" >> /etc/apt/sources.list
+          export TZ='Etc/UTC' DEBIAN_FRONTEND=noninteractive
+          apt update && apt upgrade -y
+
+          apt build-dep -y vlc
+          apt install -y git curl zip libtool automake autoconf autopoint make \
+                         gettext pkg-config subversion cmake cvs zip bzip2 patchelf \
+                         p7zip-full wget dos2unix ragel yasm g++ protobuf-compiler \
+                         m4 ant build-essential libtool-bin libavformat-dev fuse \
+                         libswresample-dev libavutil-dev libpostproc-dev libswscale-dev \
+                         wayland-protocols qtbase5-private-dev libarchive-dev libmpg123-dev \
+                         libnfs-dev libqt5svg5-dev flex bison curl qtdeclarative5-dev \
+                         qtquickcontrols2-5-dev nasm gcovr libxkbcommon-x11-dev meson || :
+          apt-get clean -y && rm -rf /var/lib/apt/lists/*
+
+          chmod -R 777 /project && git config --global --add safe.directory '*'
+
+          cd /project
+
+          ./bootstrap &&\
+          ./configure --prefix="/usr" &&\
+          make -j"$(nproc)" &&\
+          make -j"$(nproc)" DESTDIR=$(pwd)/build/ install
+
+          rm /project/build/usr/lib/vlc/plugins/plugins.dat
+
+          find /project/build/usr/lib/vlc/ -maxdepth 1 -name "lib*.so*" -exec patchelf --set-rpath '$ORIGIN/../' {} \;
+          find /project/build/usr/lib/vlc/plugins/ -name "lib*.so*" -exec patchelf --set-rpath '$ORIGIN/../../:$ORIGIN/../../../' {} \;
+
+          curl -LO 'https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage' &&\
+
+          chmod a+x linuxdeployqt-continuous-x86_64.AppImage
+
+          # linuxdeployqt workaround
+          mkdir -p /project/build/usr/share/doc/libc6 &&\
+          touch /project/build/usr/share/doc/libc6/copyright
+
+          ./linuxdeployqt-continuous-x86_64.AppImage /project/build/usr/share/applications/vlc.desktop -appimage -unsupported-allow-new-glibc -bundle-non-qt-libs -exclude-libs=libfreetype.so.6
+
+          mv VLC_media_player-*.AppImage vlc-linux-${{ matrix.arch }}.appimage && chmod 777 vlc-linux-${{ matrix.arch }}.appimage 
+
+      - name: Upload binaries
+        uses: simplex-chat/action-gh-release@v2
+        with:
+          append_body: true
+          fail_on_unmatched_files: true
+          files: ./vlc-linux-${{ matrix.arch }}.appimage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+# =========================
+#        MacOS Build
+# =========================
+
+  build-macos:
+    name: "${{ matrix.os }}"
+    needs: maybe-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            brew: /opt/homebrew
+            arch: aarch64
+          - os: macos-13
+            brew: /usr/local
+            arch: x86_64
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Install tools
+        shell: bash
+        run: |
+          brew install coreutils openjdk@11
+          sudo ln -sfn ${{ matrix.brew }}/opt/openjdk@11/libexec/openjdk.jdk /Library/Java/JavaVirtualMachines/openjdk-11.jdk
+
+      - name: Build
+        shell: bash
+        run: |
+          export JAVA_HOME=$(/usr/libexec/java_home -v 11)
+
+          mkdir build
+          cd build
+          ../extras/package/macosx/build.sh -c -a ${{ matrix.arch }} -i u ||
+            ../extras/package/macosx/build.sh -c -a ${{ matrix.arch }} -i u ||
+            ../extras/package/macosx/build.sh -c -a ${{ matrix.arch }} -i u
+
+          unzip -oqq vlc-*-release.zip && cd vlc-*-release
+          zip -r "vlc-macos-${{ matrix.arch }}.zip" . && mv "vlc-macos-${{ matrix.arch }}.zip" ..
+
+      - name: Upload binaries
+        uses: simplex-chat/action-gh-release@v2
+        with:
+          append_body: true
+          fail_on_unmatched_files: true
+          files: ./build/vlc-macos-${{ matrix.arch }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+# =========================
+#      Windows Build
+# =========================
+
+  build-windows:
+    name: "Windows"
+    needs: maybe-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: x86_64
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: simplex-chat/docker-setup-buildx-action@v3
+
+      # Otherwise we run out of disk space with Docker build
+      - name: Free disk space
+        shell: bash
+        run: ./.github/workflows/linux_util_free_space.sh
+
+      - name: Start container
+        shell: bash
+        run: |
+          docker run -t -d \
+            --device /dev/fuse \
+            --cap-add SYS_ADMIN \
+            --security-opt apparmor:unconfined \
+            --name builder \
+            -v /home/runner/work/_temp:/home/runner/work/_temp \
+            -v ${{ github.workspace }}:/project \
+            ubuntu:latest
+
+      - name: Build CLI
+        shell: docker exec -t builder sh -eu {0}
+        run: |
+          export TZ='Etc/UTC' DEBIAN_FRONTEND=noninteractive
+          apt update && apt upgrade -y
+
+          apt install -y git wget bzip2 file libwine-dev unzip libtool libtool-bin libltdl-dev pkg-config ant \
+                         build-essential automake texinfo yasm p7zip-full autopoint \
+                         gettext cmake zip wine nsis g++-mingw-w64-i686 curl gperf flex bison \
+                         libcurl4-gnutls-dev python3 python3-setuptools python3-mako python3-requests \
+                         gcc make procps ca-certificates \
+                         openjdk-11-jdk-headless nasm jq gnupg \
+                         meson autoconf dos2unix
+
+          wget https://github.com/mstorsjo/llvm-mingw/releases/download/20220906/llvm-mingw-20220906-msvcrt-ubuntu-18.04-x86_64.tar.xz
+          tar xvf llvm-mingw-20220906-msvcrt-ubuntu-18.04-x86_64.tar.xz -C /opt
+          export PATH=/opt/llvm-mingw-20220906-msvcrt-ubuntu-18.04-x86_64/bin:$PATH
+
+          update-alternatives --set java /usr/lib/jvm/java-11-openjdk-amd64/bin/java
+          chmod -R 777 /project && git config --global --add safe.directory '*'
+
+          mkdir /project/build && cd /project/build
+          ../extras/package/win32/build.sh -a x86_64 -l -r -i r ||
+            ../extras/package/win32/build.sh -a x86_64 -l -r -i r ||
+            ../extras/package/win32/build.sh -a x86_64 -l -r -i r || :
+
+          cd win64
+          mv vlc-*-win64.zip vlc-win-${{ matrix.arch }}.zip
+          chmod 777 vlc-win-${{ matrix.arch }}.zip
+
+      - name: Upload binaries
+        uses: simplex-chat/action-gh-release@v2
+        with:
+          append_body: true
+          fail_on_unmatched_files: true
+          files: ./build/win64/vlc-win-${{ matrix.arch }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
