@@ -52,7 +52,7 @@ jobs:
   build-linux:
     name: "ubuntu-22.04-${{ matrix.arch }}"
     needs: maybe-release
-    runs-on: ubuntu-${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
