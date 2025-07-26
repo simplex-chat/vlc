@@ -50,15 +50,17 @@ jobs:
 # =========================
 
   build-linux:
-    name: "ubuntu-${{ matrix.os }}"
+    name: "ubuntu-22.04-${{ matrix.arch }}"
     needs: maybe-release
     runs-on: ubuntu-${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: 22.04
-            arch: x86_64
+          - arch: x86_64
+            runner: ubuntu-22.04
+          - arch: aarch64
+            runner: ubuntu-22.04-arm
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -115,15 +117,15 @@ jobs:
           find /project/build/usr/lib/vlc/ -maxdepth 1 -name "lib*.so*" -exec patchelf --set-rpath '$ORIGIN/../' {} \;
           find /project/build/usr/lib/vlc/plugins/ -name "lib*.so*" -exec patchelf --set-rpath '$ORIGIN/../../:$ORIGIN/../../../' {} \;
 
-          curl -LO 'https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage' &&\
+          curl -LO 'https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-${{ matrix.arch }}.AppImage' &&\
 
-          chmod a+x linuxdeployqt-continuous-x86_64.AppImage
+          chmod a+x linuxdeployqt-continuous-${{ matrix.arch }}.AppImage
 
           # linuxdeployqt workaround
           mkdir -p /project/build/usr/share/doc/libc6 &&\
           touch /project/build/usr/share/doc/libc6/copyright
 
-          ./linuxdeployqt-continuous-x86_64.AppImage /project/build/usr/share/applications/vlc.desktop -appimage -unsupported-allow-new-glibc -bundle-non-qt-libs -exclude-libs=libfreetype.so.6
+          ./linuxdeployqt-continuous-${{ matrix.arch }}.AppImage /project/build/usr/share/applications/vlc.desktop -appimage -unsupported-allow-new-glibc -bundle-non-qt-libs -exclude-libs=libfreetype.so.6
 
           mv VLC_media_player-*.AppImage vlc-linux-${{ matrix.arch }}.appimage && chmod 777 vlc-linux-${{ matrix.arch }}.appimage 
 
