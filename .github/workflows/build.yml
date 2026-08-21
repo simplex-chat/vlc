@@ -176,6 +176,8 @@ jobs:
         shell: bash
         run: |
           export JAVA_HOME=$(/usr/libexec/java_home -v 11)
+          # build.sh drops homebrew from PATH, so hand it the gnu coreutils
+          export VLC_PATH=${{ matrix.brew }}/opt/coreutils/libexec/gnubin
 
           mkdir build
           cd build
