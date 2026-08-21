@@ -107,8 +107,10 @@ jobs:
 
           cd /project
 
+          # smbclient is disabled because it drags in samba's private libs,
+          # which linuxdeployqt cannot resolve with ldd and refuses to bundle
           ./bootstrap &&\
-          ./configure --prefix="/usr" &&\
+          ./configure --prefix="/usr" --disable-smbclient &&\
           make -j"$(nproc)" &&\
           make -j"$(nproc)" DESTDIR=$(pwd)/build/ install
 
