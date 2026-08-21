@@ -153,7 +153,7 @@ jobs:
           - os: macos-latest
             brew: /opt/homebrew
             arch: aarch64
-          - os: macos-13
+          - os: macos-15-intel
             brew: /usr/local
             arch: x86_64
     steps:
