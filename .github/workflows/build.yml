@@ -227,7 +227,7 @@ jobs:
             --name builder \
             -v /home/runner/work/_temp:/home/runner/work/_temp \
             -v ${{ github.workspace }}:/project \
-            ubuntu:latest
+            ubuntu:24.04
 
       - name: Build CLI
         shell: docker exec -t builder sh -eu {0}
