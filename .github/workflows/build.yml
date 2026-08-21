@@ -168,6 +168,10 @@ jobs:
           brew install coreutils openjdk@11
           sudo ln -sfn ${{ matrix.brew }}/opt/openjdk@11/libexec/openjdk.jdk /Library/Java/JavaVirtualMachines/openjdk-11.jdk
 
+      - name: Prefetch contrib tarballs
+        shell: bash
+        run: ./.github/workflows/prefetch_tarballs.sh
+
       - name: Build
         shell: bash
         run: |
@@ -176,8 +180,8 @@ jobs:
           mkdir build
           cd build
           ../extras/package/macosx/build.sh -c -a ${{ matrix.arch }} -i u ||
-            ../extras/package/macosx/build.sh -c -a ${{ matrix.arch }} -i u ||
-            ../extras/package/macosx/build.sh -c -a ${{ matrix.arch }} -i u
+            { sleep 60; ../extras/package/macosx/build.sh -c -a ${{ matrix.arch }} -i u; } ||
+            { sleep 300; ../extras/package/macosx/build.sh -c -a ${{ matrix.arch }} -i u; }
 
           unzip -oqq vlc-*-release.zip && cd vlc-*-release
           zip -r "vlc-macos-${{ matrix.arch }}.zip" . && mv "vlc-macos-${{ matrix.arch }}.zip" ..
@@ -217,6 +221,10 @@ jobs:
         shell: bash
         run: ./.github/workflows/linux_util_free_space.sh
 
+      - name: Prefetch contrib tarballs
+        shell: bash
+        run: ./.github/workflows/prefetch_tarballs.sh
+
       - name: Start container
         shell: bash
         run: |
@@ -252,8 +260,8 @@ jobs:
 
           mkdir /project/build && cd /project/build
           ../extras/package/win32/build.sh -a x86_64 -l -r -i r ||
-            ../extras/package/win32/build.sh -a x86_64 -l -r -i r ||
-            ../extras/package/win32/build.sh -a x86_64 -l -r -i r || :
+            { sleep 60; ../extras/package/win32/build.sh -a x86_64 -l -r -i r; } ||
+            { sleep 300; ../extras/package/win32/build.sh -a x86_64 -l -r -i r; } || :
 
           cd win64
           mv vlc-*-win64.zip vlc-win-${{ matrix.arch }}.zip
