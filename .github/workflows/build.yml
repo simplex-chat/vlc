@@ -88,7 +88,8 @@ jobs:
       - name: Build CLI
         shell: docker exec -t builder sh -eu {0}
         run: |
-          echo "deb-src http://deb.debian.org/debian stable main" >> /etc/apt/sources.list
+          . /etc/os-release
+          echo "deb-src http://deb.debian.org/debian $VERSION_CODENAME main" >> /etc/apt/sources.list
           export TZ='Etc/UTC' DEBIAN_FRONTEND=noninteractive
           apt update && apt upgrade -y
 
