@@ -83,7 +83,7 @@ jobs:
             --name builder \
             -v /home/runner/work/_temp:/home/runner/work/_temp \
             -v ${{ github.workspace }}:/project \
-            debian:stable
+            debian:12
 
       - name: Build CLI
         shell: docker exec -t builder sh -eu {0}
