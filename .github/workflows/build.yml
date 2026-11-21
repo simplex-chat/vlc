@@ -62,8 +62,10 @@ jobs:
         include:
           - arch: x86_64
             runner: ubuntu-22.04
+            linuxdeployqt_sha256: 974a87457ed26241b793bed7841978fcdf84158d13220e53833a06515f173b0b
           - arch: aarch64
             runner: ubuntu-22.04-arm
+            linuxdeployqt_sha256: 986d52d855a8c0ea8c51564807e8fb6af3466426d29224093c040b56ba244df3
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -131,8 +133,8 @@ jobs:
           find /project/build/usr/lib/vlc/ -maxdepth 1 -name "lib*.so*" -exec patchelf --set-rpath '$ORIGIN/../' {} \;
           find /project/build/usr/lib/vlc/plugins/ -name "lib*.so*" -exec patchelf --set-rpath '$ORIGIN/../../:$ORIGIN/../../../' {} \;
 
-          curl -LO 'https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-${{ matrix.arch }}.AppImage' &&\
-
+          curl -fLO 'https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-${{ matrix.arch }}.AppImage'
+          echo '${{ matrix.linuxdeployqt_sha256 }}  linuxdeployqt-continuous-${{ matrix.arch }}.AppImage' | sha256sum -c -
           chmod a+x linuxdeployqt-continuous-${{ matrix.arch }}.AppImage
 
           # linuxdeployqt workaround
@@ -269,6 +271,7 @@ jobs:
                          meson autoconf dos2unix
 
           wget https://github.com/mstorsjo/llvm-mingw/releases/download/20220906/llvm-mingw-20220906-msvcrt-ubuntu-18.04-x86_64.tar.xz
+          echo '98e947520a68d180e1d2e5e9c519dd6270986e9001662c2eca6fbc502fd272e6  llvm-mingw-20220906-msvcrt-ubuntu-18.04-x86_64.tar.xz' | sha256sum -c -
           tar xvf llvm-mingw-20220906-msvcrt-ubuntu-18.04-x86_64.tar.xz -C /opt
           export PATH=/opt/llvm-mingw-20220906-msvcrt-ubuntu-18.04-x86_64/bin:$PATH
 
