@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*.*.*'
 
+env:
+  SNAPSHOT: 20261111T002405Z
+
 jobs:
 
 # =============================
@@ -83,13 +86,21 @@ jobs:
             --name builder \
             -v /home/runner/work/_temp:/home/runner/work/_temp \
             -v ${{ github.workspace }}:/project \
-            debian:12
+            debian:bookworm-20261104@sha256:268fb24c39bca92d326dd83ea3abebe4a3f7751c804ffef23bb6d857dd343ff8
 
       - name: Build CLI
         shell: docker exec -t builder sh -eu {0}
         run: |
           . /etc/os-release
-          echo "deb-src http://deb.debian.org/debian $VERSION_CODENAME main" >> /etc/apt/sources.list
+          rm /etc/apt/sources.list.d/debian.sources
+          snapshot="[check-valid-until=no] http://snapshot.debian.org/archive"
+          cat > /etc/apt/sources.list <<EOF
+          deb $snapshot/debian/${{ env.SNAPSHOT }} $VERSION_CODENAME main
+          deb $snapshot/debian/${{ env.SNAPSHOT }} $VERSION_CODENAME-updates main
+          deb $snapshot/debian-security/${{ env.SNAPSHOT }} $VERSION_CODENAME-security main
+          deb-src $snapshot/debian/${{ env.SNAPSHOT }} $VERSION_CODENAME main
+          EOF
+          echo 'Acquire::Retries "10";' > /etc/apt/apt.conf.d/80retries
           export TZ='Etc/UTC' DEBIAN_FRONTEND=noninteractive
           apt update && apt upgrade -y
 
@@ -238,12 +249,15 @@ jobs:
             --name builder \
             -v /home/runner/work/_temp:/home/runner/work/_temp \
             -v ${{ github.workspace }}:/project \
-            ubuntu:24.04
+            ubuntu:noble-20261024.1@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
 
       - name: Build CLI
         shell: docker exec -t builder sh -eu {0}
         run: |
           export TZ='Etc/UTC' DEBIAN_FRONTEND=noninteractive
+          apt update && apt install -y ca-certificates
+          echo 'APT::Snapshot "${{ env.SNAPSHOT }}";' > /etc/apt/apt.conf.d/50snapshot
+          echo 'Acquire::Retries "10";' > /etc/apt/apt.conf.d/80retries
           apt update && apt upgrade -y
 
           apt install -y git wget bzip2 file libwine-dev unzip libtool libtool-bin libltdl-dev pkg-config ant \
