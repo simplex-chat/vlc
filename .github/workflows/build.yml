@@ -69,6 +69,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
+        with:
+          persist-credentials: false
 
       - name: Set up Docker Buildx
         uses: simplex-chat/docker-setup-buildx-action@v3
@@ -175,6 +177,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
+        with:
+          persist-credentials: false
 
       - name: Install tools
         shell: bash
@@ -228,6 +232,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
+        with:
+          persist-credentials: false
 
       - name: Set up Docker Buildx
         uses: simplex-chat/docker-setup-buildx-action@v3
