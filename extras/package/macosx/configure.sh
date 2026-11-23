@@ -6,7 +6,7 @@ LDFLAGS=${LDFLAGS}
 OPTIONS="
         --prefix=`pwd`/vlc_install_dir
         --enable-macosx
-        --enable-merge-ffmpeg
+        --disable-avformat
         --enable-osx-notifications
         --enable-faad
         --enable-flac
