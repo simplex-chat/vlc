@@ -131,7 +131,7 @@ jobs:
           make -j"$(nproc)" &&\
           make -j"$(nproc)" DESTDIR=$(pwd)/build/ install
 
-          rm /project/build/usr/lib/vlc/plugins/plugins.dat
+          ./.github/workflows/keep_plugins.sh /project/build/usr/lib/vlc/plugins
 
           find /project/build/usr/lib/vlc/ -maxdepth 1 -name "lib*.so*" -exec patchelf --set-rpath '$ORIGIN/../' {} \;
           find /project/build/usr/lib/vlc/plugins/ -name "lib*.so*" -exec patchelf --set-rpath '$ORIGIN/../../:$ORIGIN/../../../' {} \;
@@ -207,6 +207,7 @@ jobs:
             { sleep 300; ../extras/package/macosx/build.sh -c -a ${{ matrix.arch }} -i u; }
 
           unzip -oqq vlc-*-release.zip && cd vlc-*-release
+          ../../.github/workflows/keep_plugins.sh VLC.app/Contents/MacOS/plugins
           zip -r "vlc-macos-${{ matrix.arch }}.zip" . && mv "vlc-macos-${{ matrix.arch }}.zip" ..
 
       - name: Upload binaries
@@ -292,9 +293,11 @@ jobs:
             { sleep 60; ../extras/package/win32/build.sh -a x86_64 -l -r -i r; } ||
             { sleep 300; ../extras/package/win32/build.sh -a x86_64 -l -r -i r; } || :
 
-          cd win64
-          mv vlc-*-win64.zip vlc-win-${{ matrix.arch }}.zip
-          chmod 777 vlc-win-${{ matrix.arch }}.zip
+          mkdir win64/allowed && cd win64/allowed
+          unzip -q ../vlc-*-win64.zip
+          /project/.github/workflows/keep_plugins.sh vlc-*/plugins
+          zip -qr ../vlc-win-${{ matrix.arch }}.zip vlc-*
+          chmod 777 ../vlc-win-${{ matrix.arch }}.zip
 
       - name: Upload binaries
         uses: simplex-chat/action-gh-release@v2
