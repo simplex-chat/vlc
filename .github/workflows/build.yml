@@ -27,23 +27,10 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: actions/checkout@v3
 
-      - name: Build changelog
-        id: build_changelog
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: simplex-chat/release-changelog-builder-action@v5
-        with:
-          configuration: .github/changelog_conf.json
-          failOnError: true
-          ignorePreReleases: true
-          commitMode: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Create release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: simplex-chat/action-gh-release@v2
         with:
-          body: ${{ steps.build_changelog.outputs.changelog }}
           prerelease: true
           files: |
             COPYING
