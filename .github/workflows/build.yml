@@ -33,9 +33,11 @@ jobs:
           - arch: x86_64
             runner: ubuntu-22.04
             linuxdeployqt_sha256: 974a87457ed26241b793bed7841978fcdf84158d13220e53833a06515f173b0b
+            plugins: common linux x86_64
           - arch: aarch64
             runner: ubuntu-22.04-arm
             linuxdeployqt_sha256: 986d52d855a8c0ea8c51564807e8fb6af3466426d29224093c040b56ba244df3
+            plugins: common linux
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -123,7 +125,7 @@ jobs:
 
       - name: Check bundle
         shell: bash
-        run: python3 .github/workflows/check_bundle.py build/usr/lib/vlc/plugins .github/workflows/plugins/linux-${{ matrix.arch }}.txt build --max-glibc 2.35
+        run: python3 .github/workflows/check_bundle.py build/usr/lib/vlc/plugins build --plugins ${{ matrix.plugins }} --max-glibc 2.35
 
       - name: Upload bundle
         uses: actions/upload-artifact@v7
@@ -150,10 +152,12 @@ jobs:
             brew: /opt/homebrew
             arch: aarch64
             max_macos: '11.0'
+            plugins: common macos
           - os: macos-15-intel
             brew: /usr/local
             arch: x86_64
             max_macos: '10.13'
+            plugins: common macos x86_64
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -189,7 +193,7 @@ jobs:
 
       - name: Check bundle
         shell: bash
-        run: python3 .github/workflows/check_bundle.py build/vlc-*-release/VLC.app/Contents/MacOS/plugins .github/workflows/plugins/macos-${{ matrix.arch }}.txt build/vlc-*-release/VLC.app/Contents/MacOS --max-macos ${{ matrix.max_macos }}
+        run: python3 .github/workflows/check_bundle.py build/vlc-*-release/VLC.app/Contents/MacOS/plugins build/vlc-*-release/VLC.app/Contents/MacOS --plugins ${{ matrix.plugins }} --max-macos ${{ matrix.max_macos }}
 
       - name: Upload bundle
         uses: actions/upload-artifact@v7
@@ -212,6 +216,7 @@ jobs:
         include:
           - os: ubuntu-latest
             arch: x86_64
+            plugins: common win x86_64
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -280,7 +285,7 @@ jobs:
 
       - name: Check bundle
         shell: bash
-        run: python3 .github/workflows/check_bundle.py build/win64/allowed/vlc-*/plugins .github/workflows/plugins/win-${{ matrix.arch }}.txt build/win64/allowed/vlc-*
+        run: python3 .github/workflows/check_bundle.py build/win64/allowed/vlc-*/plugins build/win64/allowed/vlc-* --plugins ${{ matrix.plugins }}
 
       - name: Upload bundle
         uses: actions/upload-artifact@v7

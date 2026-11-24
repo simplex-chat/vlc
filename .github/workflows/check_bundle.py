@@ -16,6 +16,7 @@ AVFORMAT_MARKER = b"AVFormatContext"
 GLIBC_SYMBOL = re.compile(r"GLIBC_(\d+(?:\.\d+)+)")
 LOAD_COMMAND = "Load command"
 MACOS_MINIMUM_FIELDS = {"LC_BUILD_VERSION": "minos", "LC_VERSION_MIN_MACOSX": "version"}
+PLUGIN_LISTS = Path(__file__).parent / "plugins"
 
 Version = tuple[int, ...]
 
@@ -43,13 +44,21 @@ def plugin_name(path: Path) -> str | None:
     return None
 
 
-def check_plugins(plugins_dir: Path, expected_file: Path) -> list[str]:
-    expected = set(expected_file.read_text().split())
-    shipped = {name for name in map(plugin_name, files(plugins_dir)) if name}
-    print(f"{len(shipped)} plugins in {plugins_dir}, {len(expected)} expected", flush=True)
-    return [f"plugin missing: {name}" for name in sorted(expected - shipped)] + [
-        f"plugin not expected: {name}" for name in sorted(shipped - expected)
+def check_plugins(plugins_dir: Path, list_names: list[str]) -> list[str]:
+    lists = {name: set((PLUGIN_LISTS / f"{name}.txt").read_text().split()) for name in list_names}
+    expected = set().union(*lists.values())
+    repeated = [
+        f"plugin in more than one list: {plugin}"
+        for plugin in sorted(expected)
+        if sum(plugin in plugins for plugins in lists.values()) > 1
     ]
+    shipped = {name for name in map(plugin_name, files(plugins_dir)) if name}
+    print(f"{len(shipped)} plugins in {plugins_dir}, {len(expected)} expected in {', '.join(list_names)}", flush=True)
+    return (
+        repeated
+        + [f"plugin missing: {name}" for name in sorted(expected - shipped)]
+        + [f"plugin not expected: {name}" for name in sorted(shipped - expected)]
+    )
 
 
 def check_avformat(root: Path) -> list[str]:
@@ -107,13 +116,13 @@ def check_macos(root: Path, limit: Version) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check the plugins and binaries of a VLC bundle of the desktop app")
     parser.add_argument("plugins_dir", type=Path)
-    parser.add_argument("expected_plugins", type=Path, help="file with the plugins of this bundle, one per line")
     parser.add_argument("root", type=Path, help="directory of the files that the bundle ships")
+    parser.add_argument("--plugins", nargs="+", required=True, help=f"names of the plugin lists in {PLUGIN_LISTS}")
     limits = parser.add_mutually_exclusive_group()
     limits.add_argument("--max-glibc", type=version, help="highest glibc symbol version allowed in ELF files")
     limits.add_argument("--max-macos", type=version, help="highest minimum macOS version allowed in Mach-O files")
     args = parser.parse_args()
-    failures = check_plugins(args.plugins_dir, args.expected_plugins) + check_avformat(args.root)
+    failures = check_plugins(args.plugins_dir, args.plugins) + check_avformat(args.root)
     if args.max_glibc:
         failures += check_glibc(args.root, args.max_glibc)
     if args.max_macos:
