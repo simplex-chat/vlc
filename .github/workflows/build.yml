@@ -139,9 +139,11 @@ jobs:
 
           ./linuxdeployqt-continuous-${{ matrix.arch }}.AppImage /project/build/usr/share/applications/vlc.desktop -appimage -unsupported-allow-new-glibc -bundle-non-qt-libs -exclude-libs=libfreetype.so.6
 
-          for f in $(find /project/build -type f); do objdump -T "$f" 2>/dev/null | grep -o 'GLIBC_2\.[0-9]*' | sort -uV | tail -n 1 | sed "s|$| $f|"; done | sort -V | tail -n 20
+          mv VLC_media_player-*.AppImage vlc-linux-${{ matrix.arch }}.appimage && chmod 777 vlc-linux-${{ matrix.arch }}.appimage
 
-          mv VLC_media_player-*.AppImage vlc-linux-${{ matrix.arch }}.appimage && chmod 777 vlc-linux-${{ matrix.arch }}.appimage 
+      - name: Check bundle
+        shell: bash
+        run: python3 .github/workflows/check_bundle.py build/usr/lib/vlc/plugins .github/workflows/plugins/linux-${{ matrix.arch }}.txt build --max-glibc 2.35
 
       - name: Upload binaries
         uses: simplex-chat/action-gh-release@v2
@@ -169,9 +171,11 @@ jobs:
           - os: macos-latest
             brew: /opt/homebrew
             arch: aarch64
+            max_macos: '11.0'
           - os: macos-15-intel
             brew: /usr/local
             arch: x86_64
+            max_macos: '10.13'
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -204,6 +208,10 @@ jobs:
           unzip -oqq vlc-*-release.zip && cd vlc-*-release
           ../../.github/workflows/keep_plugins.sh VLC.app/Contents/MacOS/plugins
           zip -r "vlc-macos-${{ matrix.arch }}.zip" . && mv "vlc-macos-${{ matrix.arch }}.zip" ..
+
+      - name: Check bundle
+        shell: bash
+        run: python3 .github/workflows/check_bundle.py build/vlc-*-release/VLC.app/Contents/MacOS/plugins .github/workflows/plugins/macos-${{ matrix.arch }}.txt build/vlc-*-release/VLC.app/Contents/MacOS --max-macos ${{ matrix.max_macos }}
 
       - name: Upload binaries
         uses: simplex-chat/action-gh-release@v2
@@ -293,6 +301,10 @@ jobs:
           /project/.github/workflows/keep_plugins.sh vlc-*/plugins
           zip -qr ../vlc-win-${{ matrix.arch }}.zip vlc-*
           chmod 777 ../vlc-win-${{ matrix.arch }}.zip
+
+      - name: Check bundle
+        shell: bash
+        run: python3 .github/workflows/check_bundle.py build/win64/allowed/vlc-*/plugins .github/workflows/plugins/win-${{ matrix.arch }}.txt build/win64/allowed/vlc-*
 
       - name: Upload binaries
         uses: simplex-chat/action-gh-release@v2
