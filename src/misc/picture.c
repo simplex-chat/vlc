@@ -33,6 +33,7 @@
 #endif
 #include <assert.h>
 #include <limits.h>
+#include <stdckdint.h>
 
 #include <vlc_common.h>
 #include "picture.h"
@@ -133,8 +134,8 @@ int picture_Setup( picture_t *p_picture, const video_format_t *restrict fmt )
 
     unsigned width, height;
 
-    if (unlikely(add_overflow(fmt->i_width, i_modulo_w - 1, &width))
-     || unlikely(add_overflow(fmt->i_height, i_modulo_h - 1, &height)))
+    if (unlikely(ckd_add(&width, fmt->i_width, i_modulo_w - 1))
+     || unlikely(ckd_add(&height, fmt->i_height, i_modulo_h - 1)))
         return VLC_EGENERIC;
 
     width = width / i_modulo_w * i_modulo_w;
@@ -142,10 +143,6 @@ int picture_Setup( picture_t *p_picture, const video_format_t *restrict fmt )
 
     /* Hack: append two scan lines for some SIMD assembler */
     if (unlikely(add_overflow(height, 2 * i_ratio_h, &height)))
-        return VLC_EGENERIC;
-
-    /* plane_t uses 'int'. */
-    if (unlikely(width > INT_MAX) || unlikely(height > INT_MAX))
         return VLC_EGENERIC;
 
     for( unsigned i = 0; i < p_dsc->plane_count; i++ )
@@ -158,10 +155,26 @@ int picture_Setup( picture_t *p_picture, const video_format_t *restrict fmt )
         assert(h->den >= h->num);
         assert(w->den >= w->num);
 
-        p->i_lines = height * h->num / h->den;
+        unsigned mul_height;
+        if (unlikely(ckd_mul(&mul_height, height, h->num)))
+            return VLC_EGENERIC;
+        mul_height = mul_height / h->den;
+        if (unlikely(mul_height > INT_MAX))
+            return VLC_EGENERIC;
+
+        p->i_lines = mul_height;
         p->i_visible_lines = (fmt->i_visible_height + (h->den - 1)) / h->den * h->num;
 
-        p->i_pitch = width * w->num / w->den * p_dsc->pixel_size;
+        unsigned mul_width;
+        if (unlikely(ckd_mul(&mul_width, width, w->num)))
+            return VLC_EGENERIC;
+        mul_width = mul_width / w->den;
+        if (unlikely(ckd_mul(&mul_width, mul_width, p_dsc->pixel_size)))
+            return VLC_EGENERIC;
+        if (unlikely(mul_width > INT_MAX))
+            return VLC_EGENERIC;
+
+        p->i_pitch = mul_width;
         p->i_visible_pitch = (fmt->i_visible_width + (w->den - 1)) / w->den * w->num
                              * p_dsc->pixel_size;
         p->i_pixel_pitch = p_dsc->pixel_size;
@@ -265,8 +278,8 @@ picture_t *picture_NewFromFormat(const video_format_t *restrict fmt)
     {
         const plane_t *p = &pic->p[i];
 
-        if (unlikely(mul_overflow(p->i_pitch, p->i_lines, &plane_sizes[i]))
-         || unlikely(add_overflow(pic_size, plane_sizes[i], &pic_size)))
+        if (unlikely(ckd_mul(&plane_sizes[i], p->i_pitch, p->i_lines))
+         || unlikely(ckd_add(&pic_size, pic_size, plane_sizes[i])))
             goto error;
     }
 

@@ -44,6 +44,8 @@ static bool IsMxpeg(stream_t *s)
 {
     const uint8_t *header;
     int size = vlc_stream_Peek(s, &header, 256);
+    if(unlikely(size < 8))
+        return false;
     int position = 0;
 
     if (find_jpeg_marker(&position, header, size) != 0xd8 || position > size-2)
@@ -51,7 +53,7 @@ static bool IsMxpeg(stream_t *s)
     if (find_jpeg_marker(&position, header, position + 2) != 0xe0)
         return false;
 
-    if (position + 2 > size)
+    if (position > size - 2)
         return false;
 
     /* Skip this jpeg header */
@@ -59,34 +61,32 @@ static bool IsMxpeg(stream_t *s)
     position += header_size;
 
     /* Get enough data to analyse the next header */
-    if (position + 6 > size)
+    if (position + 8 > size)
     {
-        size = position + 6;
+        size = position + 8;
         if( vlc_stream_Peek (s, &header, size) < size )
             return false;
     }
 
     if ( !(header[position] == 0xFF && header[position+1] == 0xFE) )
         return false;
-    position += 2;
-    header_size = GetWBE (&header[position]);
+
+    header_size = GetWBE (&header[position+2]);
 
     /* Check if this is a MXF header. We may have a jpeg comment first */
-    if (!memcmp (&header[position+2], "MXF\0", 4) )
+    if (!memcmp (&header[position+4], "MXF\0", 4) )
         return true;
 
     /* Skip the jpeg comment and find the MXF header after that */
-    size = position + header_size + 8; //8 = FF FE 00 00 M X F 00
+    size = position + 2 + header_size + 8; //8 = FF FE 00 00 M X F 00
     if (vlc_stream_Peek(s, &header, size ) < size)
         return false;
 
-    position += header_size;
+    position += 2 + header_size;
     if ( !(header[position] == 0xFF && header[position+1] == 0xFE) )
         return false;
 
-    position += 4;
-
-    if (memcmp (&header[position], "MXF\0", 4) )
+    if (memcmp (&header[position + 4], "MXF\0", 4) )
         return false;
 
     return true;

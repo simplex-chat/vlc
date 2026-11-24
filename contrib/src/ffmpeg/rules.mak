@@ -261,6 +261,9 @@ ifdef USE_FFMPEG
 	$(APPLY) $(SRC)/ffmpeg/0011-avcodec-videotoolboxenc-disable-calls-on-unsupported.patch
 	$(APPLY) $(SRC)/ffmpeg/avcodec-fix-compilation-visionos.patch
 endif
+ifdef HAVE_LINUX
+	sed -i.orig 's/^check_func_headers stdlib.h arc4random_buf$$/:/' $(UNPACK_DIR)/configure
+endif
 ifdef USE_LIBAV
 	$(APPLY) $(SRC)/ffmpeg/libav_gsm.patch
 endif

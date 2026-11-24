@@ -5,7 +5,7 @@ OPTIONS="
       --enable-faad
       --enable-flac
       --enable-theora
-      --enable-avcodec --enable-merge-ffmpeg
+      --enable-avcodec --disable-avformat
       --enable-mpc
       --enable-libass
       --enable-live555

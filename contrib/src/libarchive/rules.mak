@@ -1,5 +1,5 @@
 # LIBARCHIVE
-LIBARCHIVE_VERSION := 3.8.9
+LIBARCHIVE_VERSION := 3.8.11
 LIBARCHIVE_URL := $(GITHUB)/libarchive/libarchive/releases/download/v$(LIBARCHIVE_VERSION)/libarchive-$(LIBARCHIVE_VERSION).tar.xz
 
 PKGS += libarchive
@@ -12,6 +12,7 @@ DEPS_libarchive = zlib $(DEPS_zlib)
 LIBARCHIVE_CONF := \
 		-DENABLE_CPIO=OFF -DENABLE_TAR=OFF -DENABLE_CAT=OFF \
 		-DENABLE_LIBXML2=OFF -DENABLE_LZMA=OFF -DENABLE_ICONV=OFF -DENABLE_EXPAT=OFF \
+		-DENABLE_ZSTD=OFF -DENABLE_LZ4=OFF \
 		-DENABLE_TEST=OFF -DENABLE_WERROR=OFF
 
 # CNG enables bcrypt on Windows and useless otherwise, it's not used when building for XP

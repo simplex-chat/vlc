@@ -1,0 +1,6 @@
+i420_rgb_mmx
+i420_rgb_sse2
+i420_yuy2_mmx
+i420_yuy2_sse2
+i422_yuy2_mmx
+i422_yuy2_sse2

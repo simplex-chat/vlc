@@ -1,0 +1,487 @@
+name: build
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  SNAPSHOT: 20261111T002405Z
+  SIMPLEX_CHAT_REF: 04270855469cf2637975646e23bc7d1f1ab79a74
+
+jobs:
+
+# =========================
+#        Linux Build
+# =========================
+
+  build-linux:
+    name: "ubuntu-22.04-${{ matrix.arch }}"
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-22.04
+            linuxdeployqt_sha256: 974a87457ed26241b793bed7841978fcdf84158d13220e53833a06515f173b0b
+            plugins: common linux x86_64
+          - arch: aarch64
+            runner: ubuntu-22.04-arm
+            linuxdeployqt_sha256: 986d52d855a8c0ea8c51564807e8fb6af3466426d29224093c040b56ba244df3
+            plugins: common linux
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: simplex-chat/docker-setup-buildx-action@v3
+
+      # Otherwise we run out of disk space with Docker build
+      - name: Free disk space
+        shell: bash
+        run: ./.github/workflows/linux_util_free_space.sh
+
+      - name: Start container
+        shell: bash
+        run: |
+          docker run -t -d \
+            --device /dev/fuse \
+            --cap-add SYS_ADMIN \
+            --security-opt apparmor:unconfined \
+            --name builder \
+            -v /home/runner/work/_temp:/home/runner/work/_temp \
+            -v ${{ github.workspace }}:/project \
+            debian:bookworm-20261104@sha256:268fb24c39bca92d326dd83ea3abebe4a3f7751c804ffef23bb6d857dd343ff8
+
+      - name: Build CLI
+        shell: docker exec -t builder sh -eu {0}
+        run: |
+          . /etc/os-release
+          rm /etc/apt/sources.list.d/debian.sources
+          snapshot="[check-valid-until=no] http://snapshot.debian.org/archive"
+          cat > /etc/apt/sources.list <<EOF
+          deb $snapshot/debian/${{ env.SNAPSHOT }} $VERSION_CODENAME main
+          deb $snapshot/debian/${{ env.SNAPSHOT }} $VERSION_CODENAME-updates main
+          deb $snapshot/debian-security/${{ env.SNAPSHOT }} $VERSION_CODENAME-security main
+          deb-src $snapshot/debian/${{ env.SNAPSHOT }} $VERSION_CODENAME main
+          EOF
+          echo 'Acquire::Retries "10";' > /etc/apt/apt.conf.d/80retries
+          export TZ='Etc/UTC' DEBIAN_FRONTEND=noninteractive
+          apt update && apt upgrade -y
+
+          apt build-dep -y vlc
+          apt install -y git curl zip libtool automake autoconf autopoint make \
+                         gettext pkg-config subversion cmake cvs zip bzip2 patchelf \
+                         p7zip-full wget dos2unix ragel yasm g++ protobuf-compiler \
+                         m4 ant build-essential libtool-bin libavformat-dev fuse \
+                         libswresample-dev libavutil-dev libpostproc-dev libswscale-dev \
+                         wayland-protocols qtbase5-private-dev libarchive-dev libmpg123-dev \
+                         libnfs-dev libqt5svg5-dev flex bison curl qtdeclarative5-dev \
+                         qtquickcontrols2-5-dev nasm gcovr libxkbcommon-x11-dev meson || :
+          apt-get clean -y && rm -rf /var/lib/apt/lists/*
+          dpkg-query -W -f '${binary:Package} ${Version}\n' > /project/vlc-linux-${{ matrix.arch }}-packages.txt
+
+          chmod -R 777 /project && git config --global --add safe.directory '*'
+
+          cd /project
+
+          mkdir -p contrib/native
+          (cd contrib/native && ../bootstrap --disable-all --disable-net --enable-ffmpeg && make -j"$(nproc)")
+
+          # smbclient is disabled because it drags in samba's private libs,
+          # which linuxdeployqt cannot resolve with ldd and refuses to bundle
+          ./bootstrap &&\
+          ./configure --prefix="/usr" --disable-smbclient --disable-lua --disable-avformat --disable-postproc &&\
+          make -j"$(nproc)" &&\
+          make -j"$(nproc)" DESTDIR=$(pwd)/build/ install
+
+          ./.github/workflows/keep_plugins.sh /project/build/usr/lib/vlc/plugins
+
+          find /project/build/usr/lib/vlc/ -maxdepth 1 -name "lib*.so*" -exec patchelf --set-rpath '$ORIGIN/../' {} \;
+          find /project/build/usr/lib/vlc/plugins/ -name "lib*.so*" -exec patchelf --set-rpath '$ORIGIN/../../:$ORIGIN/../../../' {} \;
+
+          curl -fLO 'https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-${{ matrix.arch }}.AppImage'
+          echo '${{ matrix.linuxdeployqt_sha256 }}  linuxdeployqt-continuous-${{ matrix.arch }}.AppImage' | sha256sum -c -
+          chmod a+x linuxdeployqt-continuous-${{ matrix.arch }}.AppImage
+
+          # linuxdeployqt workaround
+          mkdir -p /project/build/usr/share/doc/libc6 &&\
+          touch /project/build/usr/share/doc/libc6/copyright
+
+          ./linuxdeployqt-continuous-${{ matrix.arch }}.AppImage /project/build/usr/share/applications/vlc.desktop -appimage -unsupported-allow-new-glibc -bundle-non-qt-libs -exclude-libs=libfreetype.so.6
+
+          mv VLC_media_player-*.AppImage vlc-linux-${{ matrix.arch }}.appimage && chmod 777 vlc-linux-${{ matrix.arch }}.appimage
+
+      - name: Check bundle
+        shell: bash
+        run: python3 .github/workflows/check_bundle.py build/usr/lib/vlc/plugins build --plugins ${{ matrix.plugins }} --max-glibc 2.35
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: bundle-linux-${{ matrix.arch }}
+          path: |
+            vlc-linux-${{ matrix.arch }}.appimage
+            vlc-linux-${{ matrix.arch }}-packages.txt
+          retention-days: 7
+          if-no-files-found: error
+
+# =========================
+#        MacOS Build
+# =========================
+
+  build-macos:
+    name: "${{ matrix.os }}"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            brew: /opt/homebrew
+            arch: aarch64
+            max_macos: '11.0'
+            plugins: common macos
+          - os: macos-15-intel
+            brew: /usr/local
+            arch: x86_64
+            max_macos: '10.13'
+            plugins: common macos x86_64
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+
+      - name: Install tools
+        shell: bash
+        run: |
+          brew install coreutils openjdk@11
+          sudo ln -sfn ${{ matrix.brew }}/opt/openjdk@11/libexec/openjdk.jdk /Library/Java/JavaVirtualMachines/openjdk-11.jdk
+
+      - name: Prefetch contrib tarballs
+        shell: bash
+        run: ./.github/workflows/prefetch_tarballs.sh
+
+      - name: Build
+        shell: bash
+        run: |
+          export JAVA_HOME=$(/usr/libexec/java_home -v 11)
+          # build.sh drops homebrew from PATH, so hand it the gnu coreutils
+          export VLC_PATH=${{ matrix.brew }}/opt/coreutils/libexec/gnubin
+
+          mkdir build
+          cd build
+          ../extras/package/macosx/build.sh -c -a ${{ matrix.arch }} -i u ||
+            { sleep 60; ../extras/package/macosx/build.sh -c -a ${{ matrix.arch }} -i u; } ||
+            { sleep 300; ../extras/package/macosx/build.sh -c -a ${{ matrix.arch }} -i u; }
+
+          unzip -oqq vlc-*-release.zip && cd vlc-*-release
+          ../../.github/workflows/keep_plugins.sh VLC.app/Contents/MacOS/plugins
+          zip -r "vlc-macos-${{ matrix.arch }}.zip" . && mv "vlc-macos-${{ matrix.arch }}.zip" ..
+
+      - name: Check bundle
+        shell: bash
+        run: python3 .github/workflows/check_bundle.py build/vlc-*-release/VLC.app/Contents/MacOS/plugins build/vlc-*-release/VLC.app/Contents/MacOS --plugins ${{ matrix.plugins }} --max-macos ${{ matrix.max_macos }}
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: bundle-macos-${{ matrix.arch }}
+          path: build/vlc-macos-${{ matrix.arch }}.zip
+          retention-days: 7
+          if-no-files-found: error
+
+# =========================
+#      Windows Build
+# =========================
+
+  build-windows:
+    name: "Windows"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: x86_64
+            plugins: common win x86_64
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: simplex-chat/docker-setup-buildx-action@v3
+
+      # Otherwise we run out of disk space with Docker build
+      - name: Free disk space
+        shell: bash
+        run: ./.github/workflows/linux_util_free_space.sh
+
+      - name: Prefetch contrib tarballs
+        shell: bash
+        run: ./.github/workflows/prefetch_tarballs.sh
+
+      - name: Start container
+        shell: bash
+        run: |
+          docker run -t -d \
+            --device /dev/fuse \
+            --cap-add SYS_ADMIN \
+            --security-opt apparmor:unconfined \
+            --name builder \
+            -v /home/runner/work/_temp:/home/runner/work/_temp \
+            -v ${{ github.workspace }}:/project \
+            ubuntu:noble-20261024.1@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
+
+      - name: Build CLI
+        shell: docker exec -t builder sh -eu {0}
+        run: |
+          export TZ='Etc/UTC' DEBIAN_FRONTEND=noninteractive
+          apt update && apt install -y ca-certificates
+          echo 'APT::Snapshot "${{ env.SNAPSHOT }}";' > /etc/apt/apt.conf.d/50snapshot
+          echo 'Acquire::Retries "10";' > /etc/apt/apt.conf.d/80retries
+          apt update && apt upgrade -y
+
+          apt install -y git wget bzip2 file libwine-dev unzip libtool libtool-bin libltdl-dev pkg-config ant \
+                         build-essential automake texinfo yasm p7zip-full autopoint \
+                         gettext cmake zip wine nsis g++-mingw-w64-i686 curl gperf flex bison \
+                         libcurl4-gnutls-dev python3 python3-setuptools python3-mako python3-requests \
+                         gcc make procps ca-certificates \
+                         openjdk-11-jdk-headless nasm jq gnupg \
+                         meson autoconf dos2unix
+
+          wget https://github.com/mstorsjo/llvm-mingw/releases/download/20220906/llvm-mingw-20220906-msvcrt-ubuntu-18.04-x86_64.tar.xz
+          echo '98e947520a68d180e1d2e5e9c519dd6270986e9001662c2eca6fbc502fd272e6  llvm-mingw-20220906-msvcrt-ubuntu-18.04-x86_64.tar.xz' | sha256sum -c -
+          tar xvf llvm-mingw-20220906-msvcrt-ubuntu-18.04-x86_64.tar.xz -C /opt
+          export PATH=/opt/llvm-mingw-20220906-msvcrt-ubuntu-18.04-x86_64/bin:$PATH
+
+          update-alternatives --set java /usr/lib/jvm/java-11-openjdk-amd64/bin/java
+          chmod -R 777 /project && git config --global --add safe.directory '*'
+
+          mkdir /project/build && cd /project/build
+          ../extras/package/win32/build.sh -a x86_64 -l -r -i r ||
+            { sleep 60; ../extras/package/win32/build.sh -a x86_64 -l -r -i r; } ||
+            { sleep 300; ../extras/package/win32/build.sh -a x86_64 -l -r -i r; } || :
+
+          mkdir win64/allowed && cd win64/allowed
+          unzip -q ../vlc-*-win64.zip
+          /project/.github/workflows/keep_plugins.sh vlc-*/plugins
+          zip -qr ../vlc-win-${{ matrix.arch }}.zip vlc-*
+          chmod 777 ../vlc-win-${{ matrix.arch }}.zip
+
+      - name: Check bundle
+        shell: bash
+        run: python3 .github/workflows/check_bundle.py build/win64/allowed/vlc-*/plugins build/win64/allowed/vlc-* --plugins ${{ matrix.plugins }}
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: bundle-win-${{ matrix.arch }}
+          path: build/win64/vlc-win-${{ matrix.arch }}.zip
+          retention-days: 7
+          if-no-files-found: error
+
+# =========================
+#           Tests
+# =========================
+
+  test-media:
+    name: "ubuntu-22.04 (test media)"
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+
+      - name: Checkout simplex-chat
+        uses: actions/checkout@v3
+        with:
+          repository: simplex-chat/simplex-chat
+          ref: ${{ env.SIMPLEX_CHAT_REF }}
+          path: simplex-chat
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/ci
+            scripts/desktop
+            apps/multiplatform/common/src/desktopMain
+
+      - name: Compare the plugin allowlist with simplex-chat
+        shell: bash
+        run: cmp .github/workflows/vlc-plugins.txt simplex-chat/scripts/desktop/vlc-plugins.txt
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Make test media
+        run: python3 simplex-chat/scripts/ci/vlc-test.py media "$RUNNER_TEMP/vlc-media"
+
+      - name: Upload test media
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-media
+          path: ${{ runner.temp }}/vlc-media
+          retention-days: 3
+          if-no-files-found: error
+
+  test:
+    name: "${{ matrix.os }} (test ${{ matrix.bundle }})"
+    needs: [build-linux, build-macos, build-windows, test-media]
+    if: ${{ !cancelled() }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            bundle: linux-x86_64
+            checks: check audio
+          - os: ubuntu-24.04-arm
+            bundle: linux-aarch64
+            checks: check audio
+          - os: ubuntu-22.04
+            bundle: linux-x86_64
+            checks: check audio
+          - os: macos-latest
+            bundle: macos-aarch64
+            checks: check
+          - os: macos-15-intel
+            bundle: macos-x86_64
+            checks: check
+          - os: windows-latest
+            bundle: win-x86_64
+            checks: check
+    steps:
+      - name: Checkout simplex-chat
+        uses: actions/checkout@v3
+        with:
+          repository: simplex-chat/simplex-chat
+          ref: ${{ env.SIMPLEX_CHAT_REF }}
+          path: simplex-chat
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/ci
+            scripts/desktop
+            apps/multiplatform/common/src/desktopMain
+
+      - name: Download bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: bundle-${{ matrix.bundle }}
+          path: ${{ runner.temp }}/bundle
+
+      - name: Download test media
+        uses: actions/download-artifact@v8
+        with:
+          name: test-media
+          path: ${{ runner.temp }}/vlc-media
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Unpack VLC (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        working-directory: ${{ runner.temp }}/bundle
+        run: |
+          chmod +x vlc-${{ matrix.bundle }}.appimage
+          ./vlc-${{ matrix.bundle }}.appimage --appimage-extract > /dev/null
+          rm -rf squashfs-root/usr/lib/vlc/lua
+          mkdir -p "$RUNNER_TEMP/vlc"
+          cp -r squashfs-root/usr/lib/* "$RUNNER_TEMP/vlc"
+
+      - name: Unpack VLC (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        working-directory: ${{ runner.temp }}/bundle
+        run: |
+          unzip -oqq vlc-${{ matrix.bundle }}.zip
+          install_name_tool -add_rpath "@loader_path/VLC.app/Contents/MacOS/lib" vlc-cache-gen
+          cd VLC.app/Contents/MacOS/lib
+          for lib in *.dylib; do install_name_tool -add_rpath "@loader_path" "$lib" 2> /dev/null || true; done
+          cd ../plugins
+          for lib in *.dylib; do install_name_tool -add_rpath "@loader_path/../../" "$lib" 2> /dev/null || true; done
+          cd ..
+          ../../../vlc-cache-gen plugins
+          mkdir -p "$RUNNER_TEMP/vlc/vlc"
+          cp lib/* "$RUNNER_TEMP/vlc/"
+          cp -r -p plugins/ "$RUNNER_TEMP/vlc/vlc/plugins"
+
+      - name: Unpack VLC (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        working-directory: ${{ runner.temp }}/bundle
+        run: |
+          python -m zipfile -e vlc-${{ matrix.bundle }}.zip .
+          cd vlc-*/
+          find plugins -name '*.dll' | xargs touch -m -d "1970-01-01T00:00:00Z"
+          ./vlc-cache-gen plugins
+          mkdir -p "$RUNNER_TEMP/vlc/vlc"
+          cp libvlccore.dll libvlc.dll "$RUNNER_TEMP/vlc/"
+          cp -r -p plugins/ "$RUNNER_TEMP/vlc/vlc/plugins"
+
+      - name: Install the desktop libraries that VLC takes from the system and start PulseAudio
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdrm2 libx11-6 libx11-xcb1 libxcb1 libxcb-dri3-0 libfontconfig1 libfreetype6 libfribidi0 libharfbuzz0b libegl1 libgl1 pulseaudio
+          pulseaudio --start --exit-idle-time=-1
+
+      - name: Test VLC
+        shell: bash
+        run: |
+          for command in ${{ matrix.checks }}; do
+            python simplex-chat/scripts/ci/vlc-test.py "$command" "$RUNNER_TEMP/vlc" "$RUNNER_TEMP/vlc-media"
+          done
+
+# =========================
+#         Release
+# =========================
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-linux, build-macos, build-windows, test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Clone project
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+
+      - name: Download bundles
+        uses: actions/download-artifact@v8
+        with:
+          pattern: bundle-*
+          path: dist
+          merge-multiple: true
+
+      - name: Create release
+        uses: simplex-chat/action-gh-release@v2
+        with:
+          prerelease: true
+          files: |
+            COPYING
+            dist/*
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
