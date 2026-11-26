@@ -1,0 +1,45 @@
+name: rerun unacquired
+
+on:
+  workflow_run:
+    workflows: [build]
+    types: [completed]
+
+permissions:
+  actions: write
+  checks: read
+  contents: read
+
+jobs:
+  rerun:
+    name: re-run the jobs that got no runner
+    if: github.event.workflow_run.conclusion != 'success' && github.event.workflow_run.run_attempt < 10
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN: ${{ github.event.workflow_run.id }}
+      ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/workflows
+
+      - name: Check the run
+        id: check
+        run: .github/workflows/unacquired.sh "$GITHUB_REPOSITORY" "$RUN" "$ATTEMPT"
+
+      - name: Wait for runners
+        if: steps.check.outputs.unacquired == 'true'
+        run: sleep $(( ATTEMPT < 6 ? ATTEMPT * 600 : 3600 ))
+
+      - name: Check the run again
+        id: recheck
+        if: steps.check.outputs.unacquired == 'true'
+        run: .github/workflows/unacquired.sh "$GITHUB_REPOSITORY" "$RUN" "$ATTEMPT"
+
+      - name: Re-run failed jobs
+        if: steps.recheck.outputs.unacquired == 'true'
+        run: gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$RUN/rerun-failed-jobs"
